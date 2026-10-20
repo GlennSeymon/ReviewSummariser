@@ -16,6 +16,7 @@
 			"Bash(sed -i 's/\"name\": \"playgroundchatbot\"/\"name\": \"reviewsummariser\"/' package.json bun.lock)",
 			"Bash(sed -i 's#github.com/GlennSeymon/playgroundChatbot.git#github.com/GlennSeymon/ReviewSummariser.git#; s/playgroundChatbot/reviewSummariser/g' README.md)",
 			"Bash(bun install *)"
-		]
+		],
+		"deny": ["Bash(git push)", "Bash(git push *)", "Bash(gh pr create *)"]
 	}
 }
