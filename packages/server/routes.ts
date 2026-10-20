@@ -13,12 +13,8 @@ router.get('/api/hello', (_req: Request, res: Response) => {
 	res.json({ message: 'Hello World' });
 });
 
-router.post('/api/chat', async (req: Request, res: Response) => {
-	return chatController.sendMessage(req, res);
-});
-
-router.get('/api/products/:id/reviews', async (req: Request, res: Response): Promise<void> => {
-	return reviewController.getReviews(req, res);
-});
+router.post('/api/chat', chatController.sendMessage);
+router.get('/api/products/:id/reviews', reviewController.getReviews);
+router.post('/api/products/:id/reviews/summarise', reviewController.summariseReviews);
 
 export default router;
