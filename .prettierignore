@@ -1,0 +1,19 @@
+# dependencies
+node_modules
+
+# build output
+out
+dist
+*.tgz
+
+# code coverage
+coverage
+
+# lockfiles
+bun.lock
+
+# static assets
+packages/client/public
+
+# generated shadcn/ui components (re-added via the shadcn CLI)
+packages/client/src/components/ui
