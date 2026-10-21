@@ -1,4 +1,6 @@
 import type { Request, Response } from 'express';
+import { productRepository } from '../repositories/product.repository';
+import { reviewRepository } from '../repositories/review.repository';
 import { reviewService } from '../services/review.services';
 
 export const reviewController = {
@@ -10,9 +12,10 @@ export const reviewController = {
 		}
 
 		try {
-			const reviews = await reviewService.getReviews(productId);
+			const reviews = await reviewRepository.getReviews(productId);
+			const reviewSummary = await reviewRepository.getReviewSummary(productId);
 
-			res.json(reviews);
+			res.json({ reviews, reviewSummary });
 		} catch (error) {
 			res.status(500).json({ error: 'Failed to fetch reviews' });
 		}
@@ -22,6 +25,18 @@ export const reviewController = {
 		const productId = Number(req.params.id);
 		if (!Number.isInteger(productId)) {
 			res.status(400).json({ error: 'Invalid product ID' });
+			return;
+		}
+
+		const product = await productRepository.getProduct(productId);
+		if (!product) {
+			res.status(400).json({ error: 'Product not found' });
+			return;
+		}
+
+		const reviews = await reviewRepository.getReviews(productId, 1);
+		if (!reviews.length) {
+			res.status(400).json({ error: 'There are no reviews to summarise' });
 			return;
 		}
 
