@@ -13,11 +13,13 @@ export const reviewService = {
 		const joinedReviews = reviews.map((r) => r.content).join('\n\n');
 		const prompt = template.replace('{{reviews}}', joinedReviews);
 
-		const response = await llmClient.generateText({
+		const { outputText: summary } = await llmClient.generateText({
 			prompt,
 			maxTokens: 500,
 		});
 
-		return response.outputText;
+		await reviewRepository.saveReviewSummary(productId, summary);
+
+		return summary;
 	},
 };
