@@ -1,5 +1,6 @@
 import type { Review } from '../generated/prisma/client';
-import { llmClient, type GenerateTextResult } from '../llm/client';
+import { llmClient } from '../llm/client';
+import template from '../prompts/review-summarise.txt';
 import { reviewRepository } from '../repositories/review.repository';
 
 export const reviewService = {
@@ -10,7 +11,7 @@ export const reviewService = {
 	async summariseReviews(productId: number): Promise<string> {
 		const reviews = await reviewRepository.getReviews(productId, 10);
 		const joinedReviews = reviews.map((r) => r.content).join('\n\n');
-		const prompt = `Summarise the following customer reviews into a short paragraph highlighting key themes, both positive and negative: ${joinedReviews}`;
+		const prompt = template.replace('{{reviews}}', joinedReviews);
 
 		const response = await llmClient.generateText({
 			prompt,
