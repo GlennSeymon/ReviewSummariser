@@ -22,4 +22,10 @@ export const reviewRepository = {
 			update: data,
 		});
 	},
+
+	getReviewSummary(productId: number): Promise<Summary | null> {
+		return prisma.summary.findUnique({
+			where: { productId, expiresAt: { gte: new Date() } },
+		});
+	},
 };
