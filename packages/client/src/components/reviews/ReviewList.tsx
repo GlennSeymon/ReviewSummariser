@@ -1,6 +1,7 @@
 import axios from 'axios';
-import { useEffect, useState } from 'react';
 import StarRating from './StarRating';
+import Skeleton from 'react-loading-skeleton';
+import { useQuery } from '@tanstack/react-query';
 
 interface Props {
 	productId: number;
@@ -19,61 +20,75 @@ interface GetReviewsResponse {
 	reviews: Review[];
 }
 
+const getReviews = async (productId: number, signal: AbortSignal): Promise<GetReviewsResponse> => {
+	const { data } = await axios.get<GetReviewsResponse>(`/api/products/${productId}/reviews`, {
+		signal,
+	});
+	return data;
+};
+
+const getErrorMessage = (error: Error): string => {
+	if (axios.isAxiosError<{ error?: string }>(error) && error.response?.data?.error)
+		return error.response.data.error;
+	return 'Unable to load reviews';
+};
+
 const ReviewList = ({ productId }: Props) => {
-	const [reviews, setReviews] = useState<GetReviewsResponse>();
-	const [error, setError] = useState('');
-	const [isLoading, setIsLoading] = useState(true);
+	const { data, isLoading, error } = useQuery({
+		queryKey: ['reviews', productId],
+		queryFn: ({ signal }) => getReviews(productId, signal),
+	});
 
-	useEffect(() => {
-		const controller = new AbortController();
+	if (error) return <p className='text-red-500'>Error: {getErrorMessage(error)}</p>;
 
-		const getReviews = async (): Promise<void> => {
-			try {
-				const { data } = await axios.get<GetReviewsResponse>(
-					`/api/products/${productId}/reviews`,
-					{ signal: controller.signal }
-				);
-
-				setReviews(data);
-			} catch (error) {
-				if (axios.isCancel(error)) return;
-				setError('Unable to get reviews');
-			} finally {
-				setIsLoading(false);
-			}
-		};
-
-		getReviews();
-		return () => controller.abort();
-	}, [productId]);
-
-	if (isLoading) return <p>Loading.....</p>;
-	if (error) return <p>Error: {error}</p>;
-
-	console.log('Reviews', reviews);
 	return (
-		<table>
-			<thead>
-				<tr>
-					<th>Author</th>
-					<th>Rating</th>
-					<th>Content</th>
-					<th>Created</th>
-				</tr>
-			</thead>
-			<tbody>
-				{reviews?.reviews.map((review) => (
-					<tr key={review.id}>
-						<td>{review.author}</td>
-						<td>
-							<StarRating rating={review.rating} />
-						</td>
-						<td>{review.content}</td>
-						<td>{review.createdAt}</td>
+		<div className='flex flex-col gap-5'>
+			<table>
+				<thead>
+					<tr>
+						<th>Author</th>
+						<th>Rating</th>
+						<th>Content</th>
+						<th>Created</th>
 					</tr>
-				))}
-			</tbody>
-		</table>
+				</thead>
+				<tbody>
+					{isLoading ? (
+						[1, 2, 3].map((placeholder) => (
+							<tr key={placeholder}>
+								<td>
+									<Skeleton width={120} />
+								</td>
+								<td>
+									<Skeleton width={120} />
+								</td>
+								<td>
+									<Skeleton count={2} />
+								</td>
+								<td>
+									<Skeleton width={120} />
+								</td>
+							</tr>
+						))
+					) : !data?.reviews.length ? (
+						<tr>
+							<td colSpan={4}>No reviews yet</td>
+						</tr>
+					) : (
+						data.reviews.map((review) => (
+							<tr key={review.id}>
+								<td>{review.author}</td>
+								<td>
+									<StarRating rating={review.rating} />
+								</td>
+								<td>{review.content}</td>
+								<td>{new Date(review.createdAt).toLocaleDateString()}</td>
+							</tr>
+						))
+					)}
+				</tbody>
+			</table>
+		</div>
 	);
 };
 
