@@ -11,11 +11,17 @@ export const reviewController = {
 			return;
 		}
 
+		const product = await productRepository.getProduct(productId);
+		if (!product) {
+			res.status(404).json({ error: 'Product not found' });
+			return;
+		}
+
 		try {
 			const reviews = await reviewRepository.getReviews(productId);
 			const reviewSummary = await reviewRepository.getReviewSummary(productId);
 
-			res.json({ reviews, reviewSummary });
+			res.json({ reviewSummary, reviews });
 		} catch (error) {
 			res.status(500).json({ error: 'Failed to fetch reviews' });
 		}
@@ -30,13 +36,13 @@ export const reviewController = {
 
 		const product = await productRepository.getProduct(productId);
 		if (!product) {
-			res.status(400).json({ error: 'Product not found' });
+			res.status(404).json({ error: 'Product not found' });
 			return;
 		}
 
 		const reviews = await reviewRepository.getReviews(productId, 1);
 		if (!reviews.length) {
-			res.status(400).json({ error: 'There are no reviews to summarise' });
+			res.status(404).json({ error: 'There are no reviews to summarise' });
 			return;
 		}
 

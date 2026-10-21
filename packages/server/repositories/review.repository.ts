@@ -23,9 +23,11 @@ export const reviewRepository = {
 		});
 	},
 
-	getReviewSummary(productId: number): Promise<Summary | null> {
-		return prisma.summary.findUnique({
+	async getReviewSummary(productId: number): Promise<string | null> {
+		const summary = await prisma.summary.findUnique({
 			where: { productId, expiresAt: { gte: new Date() } },
 		});
+
+		return summary ? summary.content : null;
 	},
 };
