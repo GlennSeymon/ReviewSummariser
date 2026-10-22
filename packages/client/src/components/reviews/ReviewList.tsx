@@ -1,56 +1,19 @@
-import axios from 'axios';
-import StarRating from './StarRating';
-import Skeleton from 'react-loading-skeleton';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button } from '../ui/button';
 import { HiSparkles } from 'react-icons/hi2';
+import Skeleton from 'react-loading-skeleton';
+import { Button } from '../ui/button';
+import { reviewsAPI, type GetReviewsResponse, type SummariseResponse } from './reviewsAPI';
+import StarRating from './StarRating';
 
 interface Props {
 	productId: number;
 }
 
-interface Review {
-	id: number;
-	author: string;
-	content: string;
-	rating: number;
-	createdAt: string;
-}
-
-interface GetReviewsResponse {
-	reviewSummary: string | null;
-	reviews: Review[];
-}
-
-interface SummariseResponse {
-	summary: string;
-}
-
-const getReviews = async (productId: number, signal: AbortSignal): Promise<GetReviewsResponse> => {
-	const { data } = await axios.get<GetReviewsResponse>(`/api/products/${productId}/reviews`, {
-		signal,
-	});
-	return data;
-};
-
-const summariseReviews = async (productId: number): Promise<SummariseResponse> => {
-	const { data } = await axios.post<SummariseResponse>(
-		`/api/products/${productId}/reviews/summarise`
-	);
-	return data;
-};
-
-const getErrorMessage = (error: Error, fallback: string): string => {
-	if (axios.isAxiosError<{ error?: string }>(error) && error.response?.data?.error)
-		return error.response.data.error;
-	return fallback;
-};
-
 const ReviewList = ({ productId }: Props) => {
 	const queryClient = useQueryClient();
 
 	const summaryMutation = useMutation<SummariseResponse>({
-		mutationFn: () => summariseReviews(productId),
+		mutationFn: () => reviewsAPI.summariseReviews(productId),
 		onSuccess: ({ summary }) => {
 			queryClient.setQueryData<GetReviewsResponse>(['reviews', productId], (old) =>
 				old ? { ...old, reviewSummary: summary } : old
@@ -60,13 +23,13 @@ const ReviewList = ({ productId }: Props) => {
 
 	const reviewsQuery = useQuery({
 		queryKey: ['reviews', productId],
-		queryFn: ({ signal }) => getReviews(productId, signal),
+		queryFn: ({ signal }) => reviewsAPI.getReviews(productId, signal),
 	});
 
 	if (reviewsQuery.isError)
 		return (
 			<p className='text-red-500'>
-				Error: {getErrorMessage(reviewsQuery.error, 'Unable to load reviews')}
+				Error: {reviewsAPI.getErrorMessage(reviewsQuery.error, 'Unable to load reviews')}
 			</p>
 		);
 
@@ -96,7 +59,10 @@ const ReviewList = ({ productId }: Props) => {
 						)}
 						{summaryMutation.isError && (
 							<p className='text-red-500'>
-								{getErrorMessage(summaryMutation.error, 'Could not summarise. Try again')}
+								{reviewsAPI.getErrorMessage(
+									summaryMutation.error,
+									'Could not summarise. Try again'
+								)}
 							</p>
 						)}
 					</>
