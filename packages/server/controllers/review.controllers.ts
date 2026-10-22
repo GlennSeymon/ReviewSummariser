@@ -51,6 +51,7 @@ export const reviewController = {
 
 			res.json({ summary });
 		} catch (error) {
+			console.error(`Failed to summarise reviews for product ${productId}:`, error);
 			res.status(500).json({ error: 'Failed to fetch review summary' });
 		}
 	},
