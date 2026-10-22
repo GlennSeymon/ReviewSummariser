@@ -1,5 +1,5 @@
 import { llmClient } from '../llm/client';
-import template from '../prompts/review-summarise.txt';
+import template from '../llm/prompts/review-summarise.txt';
 import { reviewRepository } from '../repositories/review.repository';
 
 export const reviewService = {
