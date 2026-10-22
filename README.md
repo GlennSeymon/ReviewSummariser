@@ -5,6 +5,23 @@ star ratings, and a **Summarise** button asks a local open model, run through [O
 to condense them into a short paragraph covering the main positive and negative themes. Summaries are saved
 to the database and reused for 7 days, so the model only runs when needed.
 
+## Screenshots
+
+**Reviews for a product, before summarising.** Pick a product from the drop-down to see its reviews,
+newest first, with star ratings. Products without a saved summary show the **Summarise** button.
+
+![Review page for the Dyson V15 Detect, showing the product drop-down, the AI summary card with a Summarise button, and the review table](screenshots/01ReviewPage-NoSummary.png)
+
+**Generating a summary.** While the local Ollama model works, the button shows a spinner and is disabled,
+and placeholder lines mark where the summary will appear.
+
+![AI summary card with a disabled Summarise button showing a spinner, and skeleton placeholder lines below it](screenshots/02ReviewPage-Summarising.png)
+
+**The finished summary.** The summary replaces the button. It is saved for 7 days, so the next visit
+shows it straight away without calling the model again.
+
+![AI summary card showing a paragraph that sums up the strengths and drawbacks customers mention for the Dyson V15 Detect](screenshots/03ReviewPage-Summary.png)
+
 ## Features
 
 - **Review list:** shows each review's author, star rating, content and date, newest first
