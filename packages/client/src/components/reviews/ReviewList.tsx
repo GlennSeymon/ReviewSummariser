@@ -1,10 +1,9 @@
 import axios from 'axios';
 import StarRating from './StarRating';
 import Skeleton from 'react-loading-skeleton';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/button';
 import { HiSparkles } from 'react-icons/hi2';
-import { useState } from 'react';
 
 interface Props {
 	productId: number;
@@ -34,36 +33,48 @@ const getReviews = async (productId: number, signal: AbortSignal): Promise<GetRe
 	return data;
 };
 
-const getErrorMessage = (error: Error): string => {
+const summariseReviews = async (productId: number): Promise<SummariseResponse> => {
+	const { data } = await axios.post<SummariseResponse>(
+		`/api/products/${productId}/reviews/summarise`
+	);
+	return data;
+};
+
+const getErrorMessage = (error: Error, fallback: string): string => {
 	if (axios.isAxiosError<{ error?: string }>(error) && error.response?.data?.error)
 		return error.response.data.error;
-	return 'Unable to load reviews';
+	return fallback;
 };
 
 const ReviewList = ({ productId }: Props) => {
-	const [summary, setSummary] = useState('');
-	const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+	const queryClient = useQueryClient();
+
+	const {
+		mutate: handleSummarise,
+		isPending: isSummaryLoading,
+		error: summaryError,
+	} = useMutation<SummariseResponse>({
+		mutationFn: () => summariseReviews(productId),
+		onSuccess: ({ summary }) => {
+			queryClient.setQueryData<GetReviewsResponse>(['reviews', productId], (old) =>
+				old ? { ...old, reviewSummary: summary } : old
+			);
+		},
+	});
+
 	const { data, isLoading, error } = useQuery({
 		queryKey: ['reviews', productId],
 		queryFn: ({ signal }) => getReviews(productId, signal),
 	});
 
-	const handleSummarise = async () => {
-		setIsSummaryLoading(true);
-
-		const { data } = await axios.post<SummariseResponse>(
-			`/api/products/${productId}/reviews/summarise`
+	if (error)
+		return (
+			<p className='text-red-500'>Error: {getErrorMessage(error, 'Unable to load reviews')}</p>
 		);
-
-		setSummary(data.summary);
-		setIsSummaryLoading(false);
-	};
-
-	if (error) return <p className='text-red-500'>Error: {getErrorMessage(error)}</p>;
 
 	if (!data?.reviews.length) return null;
 
-	const currentSummary = data.reviewSummary || summary;
+	const currentSummary = data.reviewSummary;
 
 	return (
 		<>
@@ -73,7 +84,7 @@ const ReviewList = ({ productId }: Props) => {
 				) : (
 					<>
 						<Button
-							onClick={handleSummarise}
+							onClick={() => handleSummarise()}
 							className='cursor-pointer'
 							disabled={isSummaryLoading}
 						>
@@ -84,6 +95,11 @@ const ReviewList = ({ productId }: Props) => {
 							<div className='py-3'>
 								<Skeleton width={500} count={3} />
 							</div>
+						)}
+						{summaryError && (
+							<p className='text-red-500'>
+								{getErrorMessage(summaryError, 'Could not summarise. Try again')}
+							</p>
 						)}
 					</>
 				)}
