@@ -1,44 +1,48 @@
 # reviewSummariser
 
-An AI customer support chatbot for WonderWorld, a fictitious Australian theme park. Visitors can ask about
-tickets, park hours, rides, dining, accommodation and accessibility, and the bot answers in a cheerful tone
-with a bit of Aussie slang. Its answers come from a park information sheet, and it is told to stay on topic
-and not make anything up.
+A product review page with AI-generated review summaries. The app lists a product's customer reviews with
+star ratings, and a **Summarise** button asks a local open model, run through [Ollama](https://ollama.com),
+to condense them into a short paragraph covering the main positive and negative themes. Summaries are saved
+to the database and reused for 7 days, so the model only runs when needed.
 
 ## Features
 
-- **Chat interface:** user and bot messages show as separate bubbles, and the view scrolls smoothly to the
-  newest message
-- **Grounded answers:** the system prompt includes the full WonderWorld park information sheet
-  ([`prompts/WonderWorld.md`](packages/server/prompts/WonderWorld.md)), so answers come from real park data
-  rather than the model's general knowledge
-- **Persona and guardrails:** the bot only answers WonderWorld questions, uses Australian slang, and is told
-  not to invent information
-- **Conversation memory:** each browser session gets a UUID conversation ID, and the server chains replies
-  using the OpenAI Responses API's `previous_response_id`, so follow-up questions keep their context
-- **Markdown replies:** bot responses are rendered with `react-markdown`, so lists, emphasis and links
-  display properly
-- **Typing indicator:** animated dots show while a reply is on its way
-- **Sound cues:** a short "pop" when a message is sent and a notification sound when a reply arrives
-- **Keyboard friendly:** <kbd>Enter</kbd> sends and <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a new line
-- **Validation on both sides:** the form blocks empty or whitespace-only messages and caps them at 1,000
-  characters, and the server checks the same rules with a Zod schema
-- **Error handling:** invalid requests return `400` with field-level errors, model failures return `500`,
-  and the chat shows an error message
+- **Review list:** shows each review's author, star rating, content and date, newest first
+- **Star ratings:** ratings display as filled and empty stars
+- **Loading skeletons:** placeholder rows show while reviews load, and a placeholder paragraph shows while a
+  summary is being generated
+- **One-click summaries:** the **Summarise** button sends the 10 most recent reviews to a local Ollama
+  model (`tinyllama`) and shows the result above the list
+- **Local LLM:** summaries are generated on your own machine through Ollama, with no API key, usage costs or
+  data sent to a third party
+- **Cached summaries:** each summary is stored in the `summaries` table with a 7-day expiry. While it is
+  valid, it is returned with the reviews and the button is hidden, and repeat summarise requests return it
+  without calling the model
+- **Client-side caching:** reviews are fetched with TanStack Query, and a new summary is written straight
+  into the cached reviews for that product, so it never shows on the wrong product
+- **Error handling:** an invalid product ID returns `400`, a missing product or a product with no reviews
+  returns `404`, and model failures return `500`. Server error messages are shown in the UI, and the
+  underlying error is logged in the server console
 
 ## Tech Stack
 
-| Layer    | Technology                                                                                   |
-| -------- | -------------------------------------------------------------------------------------------- |
-| Frontend | React 19 + TypeScript, Vite, Tailwind CSS v4, shadcn/ui, React Hook Form, Axios, React Icons |
-| Backend  | Bun + Express 5 + TypeScript, Zod request validation                                         |
-| AI       | OpenAI Responses API (`openai` SDK)                                                          |
-| Tooling  | Bun workspaces, ESLint (flat config, typescript-eslint), Prettier, Husky + lint-staged       |
+| Layer     | Technology                                                                             |
+| --------- | -------------------------------------------------------------------------------------- |
+| Frontend  | React 19 + TypeScript, Vite, Tailwind CSS v4, shadcn/ui, TanStack Query, Axios         |
+| UI extras | React Icons, React Loading Skeleton                                                    |
+| Backend   | Bun + Express 5 + TypeScript                                                           |
+| Database  | MySQL / MariaDB with Prisma ORM 7 (`@prisma/adapter-mariadb` driver adapter)           |
+| AI        | Ollama running `tinyllama` locally, called with the `ollama` JavaScript SDK            |
+| Tooling   | Bun workspaces, ESLint (flat config, typescript-eslint), Prettier, Husky + lint-staged |
 
 ## Prerequisites
 
 - [Bun](https://bun.com) 1.4+
-- An [OpenAI API key](https://platform.openai.com/api-keys)
+- A MySQL or MariaDB database
+- [Ollama](https://docs.ollama.com/quickstart) installed locally
+
+Small models like `tinyllama` run fine on the CPU, so a GPU isn't required, though summaries are faster
+with one. See Ollama's [hardware support](https://docs.ollama.com/gpu) page.
 
 ## Getting Started
 
@@ -56,14 +60,41 @@ bun install
 cp packages/server/.env.example packages/server/.env
 ```
 
-Edit `packages/server/.env` and add your OpenAI API key:
+Edit `packages/server/.env`:
 
 ```
-OPENAI_API_KEY=sk-...
-PORT=3000   # optional, defaults to 3000
+DATABASE_URL="mysql://user:password@localhost:3306/review_summariser"
+OPENAI_API_KEY=placeholder   # must be set for the server to start (see note below)
+PORT=3000                    # optional, defaults to 3000
 ```
 
-**3. Run the dev servers**
+Summaries don't use OpenAI, but `llm/client.ts` still creates an OpenAI client on startup for older code in
+the project, and it throws if `OPENAI_API_KEY` is missing. Any value works. `HF_TOKEN` is not used.
+
+**3. Set up the database**
+
+```bash
+cd packages/server
+bunx prisma migrate deploy   # create the products, reviews and summaries tables
+bunx prisma generate         # generate the Prisma client into generated/prisma
+cd ../..
+```
+
+There is no seed script, so add some rows to `products` and `reviews` yourself, for example with
+`bunx prisma studio`. `App.tsx` shows the product with ID `4`; change the `productId` prop to match your
+data.
+
+**4. Start Ollama and pull the model**
+
+```bash
+ollama serve           # leave running in its own terminal (not needed if Ollama runs as a service)
+ollama pull tinyllama  # in another terminal
+```
+
+The server connects to Ollama at `http://localhost:11434`. To use a different model, pull it and change the
+`model` in `llmClient.summarise` in [`llm/client.ts`](packages/server/llm/client.ts).
+
+**5. Run the dev servers**
 
 ```bash
 bun run dev   # starts the client and server together
@@ -72,7 +103,7 @@ bun run dev   # starts the client and server together
 Frontend: http://localhost:5173 (proxies `/api/*` to the backend)
 Backend: http://localhost:3000
 
-**4. Build / lint / format**
+**6. Build / lint / format**
 
 ```bash
 cd packages/client
@@ -89,99 +120,175 @@ A Husky pre-commit hook runs Prettier on staged files automatically.
 ```
 reviewSummariser/
 ├── packages/
-│   ├── client/                  # Vite + React frontend
+│   ├── client/                          # Vite + React frontend
 │   │   └── src/
-│   │       ├── assets/sounds/   # Sent/received message sound cues
+│   │       ├── main.tsx                 # React root with the TanStack Query provider
+│   │       ├── App.tsx                  # Renders ReviewList for one product
 │   │       ├── components/
-│   │       │   ├── chat/        # ChatBot (state + API call), ChatInput, ChatMessages, TypingIndicator
-│   │       │   └── ui/          # shadcn/ui components
-│   │       └── lib/             # Class name helper (cn)
-│   └── server/                  # Express API
-│       ├── index.ts             # Express entry point
-│       ├── routes.ts            # Route definitions
-│       ├── controllers/         # Request validation (Zod) and HTTP responses
-│       ├── services/            # OpenAI call and system prompt assembly
-│       ├── repositories/        # Conversation state (conversation ID → last response ID)
-│       ├── prompts/
-│       │   ├── chatbot.txt      # System prompt template with persona and guardrails
-│       │   └── WonderWorld.md   # Park information injected into the prompt
+│   │       │   ├── reviews/
+│   │       │   │   ├── ReviewList.tsx   # Summary, Summarise button and review table
+│   │       │   │   ├── StarRating.tsx   # Star display for a 1–5 rating
+│   │       │   │   └── reviewsAPI.ts    # API calls, response types and error messages
+│   │       │   └── ui/                  # shadcn/ui components
+│   │       └── lib/                     # Class name helper (cn)
+│   └── server/                          # Express API
+│       ├── index.ts                     # Express entry point
+│       ├── routes.ts                    # Route definitions
+│       ├── controllers/
+│       │   └── review.controllers.ts    # Validates product ID and existence, sends responses
+│       ├── services/
+│       │   └── review.services.ts       # Reuses a cached summary or generates and saves a new one
+│       ├── repositories/
+│       │   ├── prisma.ts                # Prisma client with the MariaDB adapter
+│       │   ├── product.repository.ts    # Product lookup
+│       │   └── review.repository.ts     # Reviews and summary queries (7-day expiry)
+│       ├── llm/
+│       │   ├── client.ts                # summarise() calls Ollama
+│       │   └── prompts/
+│       │       └── summarise-reviews.txt  # System prompt for review summaries
+│       ├── prisma/
+│       │   ├── schema.prisma            # Product, Review and Summary models
+│       │   └── migrations/
+│       ├── prisma.config.ts
 │       └── .env.example
 ├── LICENSE
-└── package.json                 # Bun workspace root
+└── package.json                         # Bun workspace root
 ```
 
-## Message Lifecycle
+## Data Model
+
+| Table       | Key fields                                                          |
+| ----------- | ------------------------------------------------------------------- |
+| `products`  | `id`, `name`, `description`, `price`                                |
+| `reviews`   | `id`, `author`, `rating` (1–5), `content`, `createdAt`, `productId` |
+| `summaries` | `id`, `productId` (unique), `content`, `generatedAt`, `expiresAt`   |
+
+Each product has at most one summary. Saving a new summary replaces the old one.
+
+## Request Lifecycle
+
+**Loading the page**
 
 ```
-User types a question and presses Enter
+ReviewList mounts for a product
         │
         ▼
-  Client adds the message to the chat, plays the "pop" sound,
-  shows the typing indicator
+  GET /api/products/:id/reviews   (TanStack Query, key ['reviews', id])
         │
         ▼
-  POST /api/chat  { prompt, conversationId }
+  Controller checks the ID is a number and the product exists
         │
-        ▼
-  Controller validates with Zod (non-empty, ≤ 1000 chars, UUID conversation ID)
+        ├─── Invalid ID → 400, missing product → 404, error shown on the page
         │
-        ├─── Invalid → 400 with field errors, error message shown in chat
-        │
-        └─── Valid → Service calls the OpenAI Responses API with:
-                • system prompt = chatbot.txt + WonderWorld.md
-                • previous_response_id for this conversation (if any)
+        └─── Returns the reviews (newest first) and any unexpired summary
                 │
                 ▼
-          Repository stores the new response ID for the conversation
+  Client shows the summary if there is one, otherwise the Summarise button,
+  followed by the review table
+```
+
+**Generating a summary**
+
+```
+User clicks Summarise
+        │
+        ▼
+  POST /api/products/:id/reviews/summarise   (TanStack Query mutation)
+  Button is disabled and a skeleton paragraph shows
+        │
+        ▼
+  Controller checks the ID is valid, the product exists and it has reviews
+        │
+        ├─── Invalid ID → 400, missing product or no reviews → 404
+        │
+        └─── Service looks for an unexpired summary in the database
                 │
-                ▼
-          Client renders the reply as markdown and plays the notification sound
+                ├─── Found → returned without calling the model
+                │
+                └─── Not found → 10 most recent reviews sent to Ollama (tinyllama)
+                     with summarise-reviews.txt as the system prompt
+                        │
+                        ├─── Model fails → error logged, 500 returned
+                        │
+                        └─── Summary saved with a 7-day expiry and returned
+                                │
+                                ▼
+  Client writes the summary into the cached reviews for that product and shows it
+  in place of the button. On error, the server's message is shown under the button.
 ```
 
 ## API
 
 The Vite dev server proxies `/api/*` to the backend, so no CORS configuration is needed in development.
 
-| Method | Path         | Description                            |
-| ------ | ------------ | -------------------------------------- |
-| `POST` | `/api/chat`  | Send a message and get the bot's reply |
-| `GET`  | `/api/hello` | Simple check that the API is reachable |
+| Method | Path                                  | Description                                     |
+| ------ | ------------------------------------- | ----------------------------------------------- |
+| `GET`  | `/api/products/:id/reviews`           | Get a product's reviews and any cached summary  |
+| `POST` | `/api/products/:id/reviews/summarise` | Return the cached summary or generate a new one |
+| `GET`  | `/api/hello`                          | Simple check that the API is reachable          |
 
-**`POST /api/chat`**
+**`GET /api/products/:id/reviews`**
 
-Request:
+Response (`200`). Reviews are newest first, and `reviewSummary` is `null` when there is no unexpired
+summary:
 
 ```json
 {
-	"prompt": "What time does the park open?",
-	"conversationId": "3f1c2b8e-7a4d-4e1f-9c2a-5b6d8e0f1a2b"
+	"reviewSummary": null,
+	"reviews": [
+		{
+			"id": 12,
+			"author": "Sam",
+			"rating": 4,
+			"content": "Comfortable and the battery lasts all day.",
+			"createdAt": "2026-10-20T05:12:00.000Z",
+			"productId": 4
+		}
+	]
 }
 ```
 
-Response (`200`):
+Errors:
+
+| Status | Body                                     |
+| ------ | ---------------------------------------- |
+| `400`  | `{ "error": "Invalid product ID" }`      |
+| `404`  | `{ "error": "Product not found" }`       |
+| `500`  | `{ "error": "Failed to fetch reviews" }` |
+
+**`POST /api/products/:id/reviews/summarise`**
+
+No request body. Response (`200`):
 
 ```json
-{ "message": "G'day! The main park opens at 9 AM and closes at 10 PM, mate!" }
+{ "summary": "Customers love the comfort and battery life, but several mention a flimsy case." }
 ```
 
-Errors: `400` with Zod field errors if validation fails, and `500` with
-`{ "error": "Failed to generate a response" }` if the model call fails.
+Errors:
+
+| Status | Body                                               |
+| ------ | -------------------------------------------------- |
+| `400`  | `{ "error": "Invalid product ID" }`                |
+| `404`  | `{ "error": "Product not found" }`                 |
+| `404`  | `{ "error": "There are no reviews to summarise" }` |
+| `500`  | `{ "error": "Failed to fetch review summary" }`    |
 
 ## Future Release Plan
 
 Possible next steps:
 
-- **Persistent conversation storage:** conversation state is held in an in-memory `Map`, so it is lost on
-  every server restart and can't be shared across instances. A production version would store it in
-  SQLite, Redis or Postgres.
-- **Streaming responses:** stream tokens to the client so replies appear as they are generated rather than
-  all at once.
-- **Automated tests:** unit tests for the controller's validation and the service's prompt assembly, plus
-  component tests for the chat UI.
-- **Rate limiting and abuse protection:** there is currently nothing stopping a client from sending
-  unlimited requests to a paid API.
-- **Conversation reset:** a "new chat" button. Today a fresh conversation needs a page reload.
-- **Deployment:** host the client and API, with the API key held as a server-side secret.
+- **Product selection:** the product ID is hard-coded in `App.tsx`. Add a product list or a route per
+  product.
+- **Seed data:** a Prisma seed script so a fresh database has products and reviews to try.
+- **Configurable model:** read the Ollama model and host from environment variables instead of code.
+- **Regenerate summaries:** a way to refresh a summary before its 7-day expiry, for example when new
+  reviews arrive.
+- **Streaming summaries:** stream the model's output so the summary appears as it is generated.
+- **Remove leftover code:** the OpenAI and Hugging Face clients in `llm/client.ts` and the earlier chatbot
+  code are no longer used by the review summariser.
+- **Automated tests:** unit tests for the controller, summary caching and repository, plus component tests
+  for the review list.
+- **Deployment:** host the client, API and database, with Ollama on a server or a hosted model provider.
 
 ## License
 
