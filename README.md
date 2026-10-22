@@ -5,6 +5,9 @@ star ratings, and a **Summarise** button asks a local open model, run through [O
 to condense them into a short paragraph covering the main positive and negative themes. Summaries are saved
 to the database and reused for 7 days, so the model only runs when needed.
 
+The interface is built with [Material UI](https://mui.com/material-ui/) and a custom theme with light and
+dark modes.
+
 ## Screenshots
 
 **Reviews for a product, before summarising.** Pick a product from the drop-down to see its reviews,
@@ -24,33 +27,53 @@ shows it straight away without calling the model again.
 
 ## Features
 
-- **Review list:** shows each review's author, star rating, content and date, newest first
-- **Star ratings:** ratings display as filled and empty stars
-- **Loading skeletons:** placeholder rows show while reviews load, and a placeholder paragraph shows while a
-  summary is being generated
+### Reviews and summaries
+
+- **Product selector:** a drop-down lists every product by name, and the page shows the first one until
+  you pick another
+- **Review list:** shows each review's author, star rating, content and date, newest first, with a review
+  count above the table
 - **One-click summaries:** the **Summarise** button sends the 10 most recent reviews to a local Ollama
-  model (`tinyllama`) and shows the result above the list
+  model (`tinyllama`) and shows the result in an "AI summary" card above the list
 - **Local LLM:** summaries are generated on your own machine through Ollama, with no API key, usage costs or
   data sent to a third party
 - **Cached summaries:** each summary is stored in the `summaries` table with a 7-day expiry. While it is
   valid, it is returned with the reviews and the button is hidden, and repeat summarise requests return it
   without calling the model
-- **Client-side caching:** reviews are fetched with TanStack Query, and a new summary is written straight
-  into the cached reviews for that product, so it never shows on the wrong product
+- **Client-side caching:** products and reviews are fetched with TanStack Query, and a new summary is
+  written straight into the cached reviews for that product. The review section resets when you switch
+  products, so a summary or error never shows on the wrong product
 - **Error handling:** an invalid product ID returns `400`, a missing product or a product with no reviews
-  returns `404`, and model failures return `500`. Server error messages are shown in the UI, and the
-  underlying error is logged in the server console
+  returns `404`, and model failures return `500`. Errors show in the page as MUI alerts with the server's
+  message, and the underlying error is logged in the server console
+
+### Interface and theming
+
+- **Material UI components:** an app bar, an outlined `Select` for products, a `Card` for the summary, a
+  `Table` for reviews, `Rating` stars, `Alert`s for errors and `Skeleton` placeholders
+- **Loading states:** placeholder rows show while reviews load, and the Summarise button shows a spinner
+  with placeholder lines while a summary is generated
+- **Light and dark modes:** a theme button in the app bar opens a menu with **Light**, **Dark** and
+  **System**. System follows the operating system setting, and the choice is remembered in the browser
+- **Custom theme:** navy blue primary colour with matching light and dark palettes, Noto Sans type,
+  10px rounded corners, flat outlined cards and small uppercase table headings, defined in
+  [`theme.ts`](packages/client/src/theme.ts)
+- **CSS theme variables:** the theme uses MUI's CSS variables, so switching modes needs no re-render, and
+  the `.light` / `.dark` class on `<html>` also drives Tailwind's `dark:` variant
+- **Responsive layout:** content sits in a centred container, and the product drop-down goes full width
+  on small screens
 
 ## Tech Stack
 
-| Layer     | Technology                                                                             |
-| --------- | -------------------------------------------------------------------------------------- |
-| Frontend  | React 19 + TypeScript, Vite, Tailwind CSS v4, shadcn/ui, TanStack Query, Axios         |
-| UI extras | React Icons, React Loading Skeleton                                                    |
-| Backend   | Bun + Express 5 + TypeScript                                                           |
-| Database  | MySQL / MariaDB with Prisma ORM 7 (`@prisma/adapter-mariadb` driver adapter)           |
-| AI        | Ollama running `tinyllama` locally, called with the `ollama` JavaScript SDK            |
-| Tooling   | Bun workspaces, ESLint (flat config, typescript-eslint), Prettier, Husky + lint-staged |
+| Layer    | Technology                                                                              |
+| -------- | --------------------------------------------------------------------------------------- |
+| Frontend | React 19 + TypeScript, Vite, TanStack Query, Axios                                      |
+| UI       | Material UI v9 (`@mui/material`, `@mui/icons-material`, Emotion), Noto Sans font        |
+| Theming  | MUI `createTheme` with light and dark color schemes, CSS variables and `useColorScheme` |
+| Backend  | Bun + Express 5 + TypeScript                                                            |
+| Database | MySQL / MariaDB with Prisma ORM 7 (`@prisma/adapter-mariadb` driver adapter)            |
+| AI       | Ollama running `tinyllama` locally, called with the `ollama` JavaScript SDK             |
+| Tooling  | Bun workspaces, ESLint (flat config, typescript-eslint), Prettier, Husky + lint-staged  |
 
 ## Prerequisites
 
@@ -98,8 +121,7 @@ cd ../..
 ```
 
 There is no seed script, so add some rows to `products` and `reviews` yourself, for example with
-`bunx prisma studio`. `App.tsx` shows the product with ID `4`; change the `productId` prop to match your
-data.
+`bunx prisma studio`. Every product appears in the drop-down.
 
 **4. Start Ollama and pull the model**
 
@@ -139,25 +161,28 @@ reviewSummariser/
 ├── packages/
 │   ├── client/                          # Vite + React frontend
 │   │   └── src/
-│   │       ├── main.tsx                 # React root with the TanStack Query provider
-│   │       ├── App.tsx                  # Renders ReviewList for one product
-│   │       ├── components/
-│   │       │   ├── reviews/
-│   │       │   │   ├── ReviewList.tsx   # Summary, Summarise button and review table
-│   │       │   │   ├── StarRating.tsx   # Star display for a 1–5 rating
-│   │       │   │   └── reviewsAPI.ts    # API calls, response types and error messages
-│   │       │   └── ui/                  # shadcn/ui components
-│   │       └── lib/                     # Class name helper (cn)
+│   │       ├── main.tsx                 # React root with the MUI theme, CssBaseline and TanStack Query
+│   │       ├── theme.ts                 # MUI theme: light/dark palettes, typography, component overrides
+│   │       ├── App.tsx                  # App bar, product drop-down and ReviewList
+│   │       └── components/
+│   │           ├── ColorModeToggle.tsx  # Light / Dark / System menu
+│   │           ├── products/
+│   │           │   ├── ProductSelect.tsx  # Product drop-down
+│   │           │   └── productsAPI.ts     # Product list API call and type
+│   │           └── reviews/
+│   │               ├── ReviewList.tsx   # AI summary card, Summarise button and review table
+│   │               └── reviewsAPI.ts    # API calls, response types and error messages
 │   └── server/                          # Express API
 │       ├── index.ts                     # Express entry point
 │       ├── routes.ts                    # Route definitions
 │       ├── controllers/
+│       │   ├── product.controllers.ts   # Lists products
 │       │   └── review.controllers.ts    # Validates product ID and existence, sends responses
 │       ├── services/
 │       │   └── review.services.ts       # Reuses a cached summary or generates and saves a new one
 │       ├── repositories/
 │       │   ├── prisma.ts                # Prisma client with the MariaDB adapter
-│       │   ├── product.repository.ts    # Product lookup
+│       │   ├── product.repository.ts    # Product list and lookup
 │       │   └── review.repository.ts     # Reviews and summary queries (7-day expiry)
 │       ├── llm/
 │       │   ├── client.ts                # summarise() calls Ollama
@@ -187,7 +212,16 @@ Each product has at most one summary. Saving a new summary replaces the old one.
 **Loading the page**
 
 ```
-ReviewList mounts for a product
+App loads
+        │
+        ▼
+  GET /api/products   (TanStack Query, key ['products'])
+        │
+        ▼
+  Product drop-down filled, first product selected by default
+        │
+        ▼
+  ReviewList mounts for the selected product (remounts when the user picks another)
         │
         ▼
   GET /api/products/:id/reviews   (TanStack Query, key ['reviews', id])
@@ -240,9 +274,23 @@ The Vite dev server proxies `/api/*` to the backend, so no CORS configuration is
 
 | Method | Path                                  | Description                                     |
 | ------ | ------------------------------------- | ----------------------------------------------- |
+| `GET`  | `/api/products`                       | List all products (ID and name), sorted by name |
 | `GET`  | `/api/products/:id/reviews`           | Get a product's reviews and any cached summary  |
 | `POST` | `/api/products/:id/reviews/summarise` | Return the cached summary or generate a new one |
 | `GET`  | `/api/hello`                          | Simple check that the API is reachable          |
+
+**`GET /api/products`**
+
+Response (`200`):
+
+```json
+[
+	{ "id": 3, "name": "Apple MacBook Air 13-inch M4" },
+	{ "id": 4, "name": "Breville Barista Express Espresso Machine" }
+]
+```
+
+Errors: `500` `{ "error": "Failed to fetch products" }`.
 
 **`GET /api/products/:id/reviews`**
 
@@ -294,15 +342,16 @@ Errors:
 
 Possible next steps:
 
-- **Product selection:** the product ID is hard-coded in `App.tsx`. Add a product list or a route per
-  product.
 - **Seed data:** a Prisma seed script so a fresh database has products and reviews to try.
 - **Configurable model:** read the Ollama model and host from environment variables instead of code.
 - **Regenerate summaries:** a way to refresh a summary before its 7-day expiry, for example when new
   reviews arrive.
 - **Streaming summaries:** stream the model's output so the summary appears as it is generated.
-- **Remove leftover code:** the OpenAI and Hugging Face clients in `llm/client.ts` and the earlier chatbot
-  code are no longer used by the review summariser.
+- **Remove leftover code:** the OpenAI and Hugging Face clients in `llm/client.ts`, the earlier chatbot
+  code, and Tailwind / shadcn/ui (now only used by the chatbot components) are no longer needed by the
+  review summariser.
+- **Smaller bundle:** MUI makes the production bundle larger than 500 kB, so split the code into smaller
+  chunks.
 - **Automated tests:** unit tests for the controller, summary caching and repository, plus component tests
   for the review list.
 - **Deployment:** host the client, API and database, with Ollama on a server or a hosted model provider.
