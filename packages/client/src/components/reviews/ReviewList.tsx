@@ -49,11 +49,7 @@ const getErrorMessage = (error: Error, fallback: string): string => {
 const ReviewList = ({ productId }: Props) => {
 	const queryClient = useQueryClient();
 
-	const {
-		mutate: handleSummarise,
-		isPending: isSummaryLoading,
-		error: summaryError,
-	} = useMutation<SummariseResponse>({
+	const summaryMutation = useMutation<SummariseResponse>({
 		mutationFn: () => summariseReviews(productId),
 		onSuccess: ({ summary }) => {
 			queryClient.setQueryData<GetReviewsResponse>(['reviews', productId], (old) =>
@@ -62,19 +58,21 @@ const ReviewList = ({ productId }: Props) => {
 		},
 	});
 
-	const { data, isLoading, error } = useQuery({
+	const reviewsQuery = useQuery({
 		queryKey: ['reviews', productId],
 		queryFn: ({ signal }) => getReviews(productId, signal),
 	});
 
-	if (error)
+	if (reviewsQuery.isError)
 		return (
-			<p className='text-red-500'>Error: {getErrorMessage(error, 'Unable to load reviews')}</p>
+			<p className='text-red-500'>
+				Error: {getErrorMessage(reviewsQuery.error, 'Unable to load reviews')}
+			</p>
 		);
 
-	if (!data?.reviews.length) return null;
+	if (!reviewsQuery.data?.reviews.length) return null;
 
-	const currentSummary = data.reviewSummary;
+	const currentSummary = reviewsQuery.data.reviewSummary || summaryMutation.data?.summary;
 
 	return (
 		<>
@@ -84,21 +82,21 @@ const ReviewList = ({ productId }: Props) => {
 				) : (
 					<>
 						<Button
-							onClick={() => handleSummarise()}
+							onClick={() => summaryMutation.mutate()}
 							className='cursor-pointer'
-							disabled={isSummaryLoading}
+							disabled={summaryMutation.isPending}
 						>
 							<HiSparkles />
 							Summarise
 						</Button>
-						{isSummaryLoading && (
+						{summaryMutation.isPending && (
 							<div className='py-3'>
 								<Skeleton width={500} count={3} />
 							</div>
 						)}
-						{summaryError && (
+						{summaryMutation.isError && (
 							<p className='text-red-500'>
-								{getErrorMessage(summaryError, 'Could not summarise. Try again')}
+								{getErrorMessage(summaryMutation.error, 'Could not summarise. Try again')}
 							</p>
 						)}
 					</>
@@ -115,7 +113,7 @@ const ReviewList = ({ productId }: Props) => {
 						</tr>
 					</thead>
 					<tbody>
-						{isLoading ? (
+						{reviewsQuery.isLoading ? (
 							[1, 2, 3].map((placeholder) => (
 								<tr key={placeholder}>
 									<td>
@@ -132,12 +130,12 @@ const ReviewList = ({ productId }: Props) => {
 									</td>
 								</tr>
 							))
-						) : !data?.reviews.length ? (
+						) : !reviewsQuery.data?.reviews.length ? (
 							<tr>
 								<td colSpan={4}>No reviews yet</td>
 							</tr>
 						) : (
-							data.reviews.map((review) => (
+							reviewsQuery.data.reviews.map((review) => (
 								<tr key={review.id}>
 									<td>{review.author}</td>
 									<td>
