@@ -1,4 +1,4 @@
-# reviewSummariser
+# Review Summariser
 
 A product review page with AI-generated review summaries. The app lists a product's customer reviews with
 star ratings, and a **Summarise** button asks a local open model, run through [Ollama](https://ollama.com),
